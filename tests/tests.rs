@@ -50,15 +50,17 @@ fn push_char() {
 
 #[test]
 fn push_chunk() {
-    for &text in TEXTS {
-        let mut builder = Utf8Builder::new();
+    for chunk_size in 1..=8 {
+        for &text in TEXTS {
+            let mut builder = Utf8Builder::new();
 
-        for c in text.as_bytes().chunks(3) {
-            builder.push_chunk(c).unwrap();
+            for c in text.as_bytes().chunks(chunk_size) {
+                builder.push_chunk(c).unwrap();
+            }
+
+            let result = builder.finalize().unwrap();
+
+            assert_eq!(text, result.as_str());
         }
-
-        let result = builder.finalize().unwrap();
-
-        assert_eq!(text, result.as_str());
     }
 }

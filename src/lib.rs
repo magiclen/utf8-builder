@@ -1,9 +1,31 @@
 /*!
 # UTF-8 Builder
 
-Build and validate UTF-8 data from chunks.
+Build and validate UTF-8 data from chunks. Each chunk doesn't have to be a complete UTF-8 data.
 
-## Examples
+## Motives and Examples
+
+When we want our Rust program to input a UTF-8 data, we can store all data in the memory and use `String::from_utf8(vec)` to validate it and convert it into a `String` instance.
+
+However, it would be better if we perform UTF-8 validation while fetching and storing the data into the memory. In such a way, if the data is not UTF-8, we don't have to waste the memory space and time to store it.
+
+```rust
+use utf8_builder::Utf8Builder;
+
+const TEXT1: &str = "is is English.";
+const TEXT2: &str = "這是中文。";
+
+let mut builder = Utf8Builder::new();
+
+builder.push(b'T').unwrap();
+builder.push_char('h').unwrap();
+builder.push_str(TEXT1).unwrap();
+builder.push_chunk(TEXT2.as_bytes()).unwrap();
+
+let result = builder.finalize().unwrap();
+
+assert_eq!(format!("Th{}{}", TEXT1, TEXT2), result);
+```
 
 ## No Std
 
@@ -33,10 +55,9 @@ pub use error::Utf8Error;
 #[derive(Debug, Clone, Default)]
 pub struct Utf8Builder {
     buffer: Vec<u8>,
-    s: [u8; 3],
-    /// the valid length for the `s` array
+    /// the length for the incomplete character
     sl: u8,
-    /// the expected length for the `s` array
+    /// the valid expected length for the incomplete character
     sel: u8,
 }
 
@@ -46,7 +67,6 @@ impl Utf8Builder {
     pub const fn new() -> Self {
         Utf8Builder {
             buffer: Vec::new(),
-            s: [0; 3],
             sl: 0,
             sel: 0,
         }
@@ -57,7 +77,6 @@ impl Utf8Builder {
     pub fn with_capacity(capacity: usize) -> Self {
         Utf8Builder {
             buffer: Vec::with_capacity(capacity),
-            s: [0; 3],
             sl: 0,
             sel: 0,
         }
@@ -69,16 +88,16 @@ impl Utf8Builder {
         self.buffer.reserve(additional);
     }
 
-    /// Returns the number of elements in the buffers.
+    /// Returns the number of elements in the buffer.
     #[inline]
     pub fn len(&self) -> usize {
-        self.buffer.len() + self.sl as usize
+        self.buffer.len()
     }
 
     /// Returns `true` if the builder contains no data.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.buffer.is_empty() && self.sl == 0
+        self.buffer.is_empty()
     }
 }
 
@@ -114,19 +133,18 @@ impl Utf8Builder {
                     self.buffer.push(b);
                 }
                 _ => {
-                    self.s[0] = b;
+                    self.buffer.push(b);
                     self.sl = 1;
                     self.sel = w as u8;
                 }
             }
         } else if self.sl + 1 == self.sel {
-            self.buffer.extend_from_slice(&self.s[..self.sl as usize]);
             self.buffer.push(b);
 
             self.sl = 0;
             // self.sel = 0; // no need
         } else {
-            self.s[self.sl as usize] = b;
+            self.buffer.push(b);
 
             self.sl += 1;
         }
@@ -177,7 +195,7 @@ impl Utf8Builder {
             return Ok(());
         }
 
-        let mut e = if self.sl != 0 {
+        let mut e = if self.sl > 0 {
             let r = (self.sel - self.sl) as usize;
 
             match r.cmp(&chunk_size) {
@@ -185,29 +203,25 @@ impl Utf8Builder {
                     let sl = self.sl as usize;
                     let nsl = sl + chunk_size;
 
-                    self.s[sl..nsl].copy_from_slice(chunk);
+                    self.buffer.extend_from_slice(chunk);
 
                     self.sl = nsl as u8;
 
                     return Ok(());
                 }
                 Ordering::Equal => {
-                    self.buffer.extend_from_slice(&self.s[..self.sl as usize]);
+                    self.buffer.extend_from_slice(chunk);
 
                     self.sl = 0;
                     // self.sel = 0; // no need
-
-                    self.buffer.extend_from_slice(chunk);
 
                     return Ok(());
                 }
                 Ordering::Less => {
-                    self.buffer.extend_from_slice(&self.s[..self.sl as usize]);
+                    self.buffer.extend_from_slice(&chunk[..r]);
 
                     self.sl = 0;
                     // self.sel = 0; // no need
-
-                    self.buffer.extend_from_slice(&chunk[..r]);
 
                     r
                 }
@@ -234,7 +248,7 @@ impl Utf8Builder {
                     break;
                 }
             } else {
-                self.s[..r].copy_from_slice(&chunk[e..]);
+                self.buffer.extend_from_slice(&chunk[e..]);
 
                 self.sl = r as u8;
                 self.sel = w as u8;
@@ -252,7 +266,6 @@ impl From<&str> for Utf8Builder {
     fn from(s: &str) -> Self {
         Utf8Builder {
             buffer: s.as_bytes().to_vec(),
-            s: [0; 3],
             sl: 0,
             sel: 0,
         }
@@ -264,7 +277,6 @@ impl From<String> for Utf8Builder {
     fn from(s: String) -> Self {
         Utf8Builder {
             buffer: s.into_bytes(),
-            s: [0; 3],
             sl: 0,
             sel: 0,
         }
