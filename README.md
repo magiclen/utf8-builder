@@ -9,7 +9,7 @@ Build and validate UTF-8 data from chunks. Each chunk doesn't have to be a compl
 
 When we want our Rust program to input a UTF-8 data, we can store all data in the memory and use `String::from_utf8(vec)` to validate it and convert it into a `String` instance.
 
-However, it would be better if we perform UTF-8 validation while fetching and storing the data into the memory. In such a way, if the data is not UTF-8, we don't have to waste the memory space and time to store it.
+However, it would be better if we perform UTF-8 validation while fetching and storing the data into the memory. In such a way, if the data is not UTF-8, we don't have to waste the memory space and time to store all of it.
 
 ```rust
 use utf8_builder::Utf8Builder;
