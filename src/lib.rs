@@ -44,10 +44,8 @@ extern crate alloc;
 
 mod error;
 
+use alloc::{string::String, vec::Vec};
 use core::cmp::Ordering;
-
-use alloc::string::String;
-use alloc::vec::Vec;
 
 pub use error::Utf8Error;
 
@@ -56,9 +54,9 @@ pub use error::Utf8Error;
 pub struct Utf8Builder {
     buffer: Vec<u8>,
     /// the length for the incomplete character
-    sl: u8,
+    sl:     u8,
     /// the valid expected length for the incomplete character
-    sel: u8,
+    sel:    u8,
 }
 
 impl Utf8Builder {
@@ -66,9 +64,7 @@ impl Utf8Builder {
     #[inline]
     pub const fn new() -> Self {
         Utf8Builder {
-            buffer: Vec::new(),
-            sl: 0,
-            sel: 0,
+            buffer: Vec::new(), sl: 0, sel: 0
         }
     }
 
@@ -76,9 +72,7 @@ impl Utf8Builder {
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Utf8Builder {
-            buffer: Vec::with_capacity(capacity),
-            sl: 0,
-            sel: 0,
+            buffer: Vec::with_capacity(capacity), sl: 0, sel: 0
         }
     }
 
@@ -131,12 +125,12 @@ impl Utf8Builder {
                 0 => return Err(Utf8Error),
                 1 => {
                     self.buffer.push(b);
-                }
+                },
                 _ => {
                     self.buffer.push(b);
                     self.sl = 1;
                     self.sel = w as u8;
-                }
+                },
             }
         } else if self.sl + 1 == self.sel {
             self.buffer.push(b);
@@ -208,7 +202,7 @@ impl Utf8Builder {
                     self.sl = nsl as u8;
 
                     return Ok(());
-                }
+                },
                 Ordering::Equal => {
                     self.buffer.extend_from_slice(chunk);
 
@@ -216,7 +210,7 @@ impl Utf8Builder {
                     // self.sel = 0; // no need
 
                     return Ok(());
-                }
+                },
                 Ordering::Less => {
                     self.buffer.extend_from_slice(&chunk[..r]);
 
@@ -224,7 +218,7 @@ impl Utf8Builder {
                     // self.sel = 0; // no need
 
                     r
-                }
+                },
             }
         } else {
             0usize
@@ -265,9 +259,7 @@ impl From<&str> for Utf8Builder {
     #[inline]
     fn from(s: &str) -> Self {
         Utf8Builder {
-            buffer: s.as_bytes().to_vec(),
-            sl: 0,
-            sel: 0,
+            buffer: s.as_bytes().to_vec(), sl: 0, sel: 0
         }
     }
 }
@@ -276,9 +268,7 @@ impl From<String> for Utf8Builder {
     #[inline]
     fn from(s: String) -> Self {
         Utf8Builder {
-            buffer: s.into_bytes(),
-            sl: 0,
-            sel: 0,
+            buffer: s.into_bytes(), sl: 0, sel: 0
         }
     }
 }

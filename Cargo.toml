@@ -3,6 +3,7 @@ name = "utf8-builder"
 version = "0.1.2"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2021"
+rust-version = "1.56"
 repository = "https://github.com/magiclen/utf8-builder"
 homepage = "https://magiclen.org/utf8-builder"
 keywords = ["utf-8", "string", "character"]

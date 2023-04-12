@@ -1,8 +1,7 @@
 #[cfg(feature = "std")]
-use std::fmt::{self, Display, Formatter};
-
-#[cfg(feature = "std")]
 use std::error::Error;
+#[cfg(feature = "std")]
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
 pub struct Utf8Error;
