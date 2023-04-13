@@ -9,7 +9,6 @@ homepage = "https://magiclen.org/utf8-builder"
 keywords = ["utf-8", "string", "character"]
 categories = ["no-std", "encoding"]
 description = "Build and validate UTF-8 data from chunks. Each chunk doesn't have to be a complete UTF-8 data."
-readme = "README.md"
 license = "MIT"
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 
