@@ -35,11 +35,11 @@ extern crate alloc;
 mod error;
 
 use alloc::{string::String, vec::Vec};
-use core::cmp::Ordering;
+use core::str::from_utf8;
 
 pub use error::Utf8Error;
 
-/// A builder for Building and validating UTF-8 data from chunks.
+/// A builder for building and validating UTF-8 data from chunks.
 #[derive(Debug, Clone, Default)]
 pub struct Utf8Builder {
     buffer: Vec<u8>,
@@ -58,7 +58,7 @@ impl Utf8Builder {
         }
     }
 
-    /// Constructs a new, empty `with_capacity` with a specific capacity.
+    /// Constructs a new, empty `Utf8Builder` with a specific capacity.
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Utf8Builder {
@@ -88,7 +88,7 @@ impl Utf8Builder {
 impl Utf8Builder {
     /// Returns whether the current data are valid UTF-8
     #[inline]
-    pub fn is_valid(&self) -> bool {
+    pub const fn is_valid(&self) -> bool {
         self.sl == 0
     }
 
@@ -105,8 +105,25 @@ impl Utf8Builder {
     }
 }
 
+/// Checks whether `b` can be the `index`-th (1-based) continuation byte of a character starting with `lead`, according to RFC 3629.
+#[inline]
+const fn is_valid_continuation(lead: u8, index: u8, b: u8) -> bool {
+    if index == 1 {
+        match lead {
+            0xE0 => matches!(b, 0xA0..=0xBF),
+            0xED => matches!(b, 0x80..=0x9F),
+            0xF0 => matches!(b, 0x90..=0xBF),
+            0xF4 => matches!(b, 0x80..=0x8F),
+            _ => matches!(b, 0x80..=0xBF),
+        }
+    } else {
+        matches!(b, 0x80..=0xBF)
+    }
+}
+
 impl Utf8Builder {
     /// Pushes a byte.
+    #[inline]
     pub fn push(&mut self, b: u8) -> Result<(), Utf8Error> {
         if self.sl == 0 {
             let w = utf8_width::get_width(b);
@@ -122,15 +139,22 @@ impl Utf8Builder {
                     self.sel = w as u8;
                 },
             }
-        } else if self.sl + 1 == self.sel {
-            self.buffer.push(b);
-
-            self.sl = 0;
-            // self.sel = 0; // no need
         } else {
+            // the lead byte of the pending incomplete character is still in the buffer
+            let lead = self.buffer[self.buffer.len() - self.sl as usize];
+
+            if !is_valid_continuation(lead, self.sl, b) {
+                return Err(Utf8Error);
+            }
+
             self.buffer.push(b);
 
-            self.sl += 1;
+            if self.sl + 1 == self.sel {
+                self.sl = 0;
+                // self.sel = 0; // no need
+            } else {
+                self.sl += 1;
+            }
         }
 
         Ok(())
@@ -149,21 +173,12 @@ impl Utf8Builder {
     }
 
     /// Pushes a char.
+    #[inline]
     pub fn push_char(&mut self, c: char) -> Result<(), Utf8Error> {
         if self.sl == 0 {
-            self.buffer.reserve(4);
+            let mut tmp = [0u8; 4];
 
-            let len = self.buffer.len();
-
-            unsafe {
-                self.buffer.set_len(len + 4);
-            }
-
-            let c = c.encode_utf8(&mut self.buffer[len..]).len();
-
-            unsafe {
-                self.buffer.set_len(len + c);
-            }
+            self.buffer.extend_from_slice(c.encode_utf8(&mut tmp).as_bytes());
 
             Ok(())
         } else {
@@ -179,66 +194,61 @@ impl Utf8Builder {
             return Ok(());
         }
 
-        let mut e = if self.sl > 0 {
+        let e = if self.sl > 0 {
+            // the lead byte of the pending incomplete character is still in the buffer
+            let lead = self.buffer[self.buffer.len() - self.sl as usize];
+
             let r = (self.sel - self.sl) as usize;
+            let take = r.min(chunk_size);
 
-            match r.cmp(&chunk_size) {
-                Ordering::Greater => {
-                    let sl = self.sl as usize;
-                    let nsl = sl + chunk_size;
-
-                    self.buffer.extend_from_slice(chunk);
-
-                    self.sl = nsl as u8;
-
-                    return Ok(());
-                },
-                Ordering::Equal => {
-                    self.buffer.extend_from_slice(chunk);
-
-                    self.sl = 0;
-                    // self.sel = 0; // no need
-
-                    return Ok(());
-                },
-                Ordering::Less => {
-                    self.buffer.extend_from_slice(&chunk[..r]);
-
-                    self.sl = 0;
-                    // self.sel = 0; // no need
-
-                    r
-                },
+            for (i, &b) in chunk[..take].iter().enumerate() {
+                if !is_valid_continuation(lead, self.sl + i as u8, b) {
+                    return Err(Utf8Error);
+                }
             }
+
+            self.buffer.extend_from_slice(&chunk[..take]);
+
+            if take < r {
+                self.sl += take as u8;
+
+                return Ok(());
+            }
+
+            self.sl = 0;
+            // self.sel = 0; // no need
+
+            if take == chunk_size {
+                return Ok(());
+            }
+
+            take
         } else {
             0usize
         };
 
-        loop {
-            let w = utf8_width::get_width(chunk[e]);
+        let rest = &chunk[e..];
 
-            if w == 0 {
-                return Err(Utf8Error);
-            }
+        match from_utf8(rest) {
+            Ok(s) => {
+                self.buffer.extend_from_slice(s.as_bytes());
+            },
+            Err(error) => {
+                let valid_up_to = error.valid_up_to();
 
-            let r = chunk_size - e;
+                if error.error_len().is_some() {
+                    // still keep the leading valid characters so the builder remains usable
+                    self.buffer.extend_from_slice(&rest[..valid_up_to]);
 
-            if r >= w {
-                self.buffer.extend_from_slice(&chunk[e..e + w]);
-
-                e += w;
-
-                if e == chunk_size {
-                    break;
+                    return Err(Utf8Error);
                 }
-            } else {
-                self.buffer.extend_from_slice(&chunk[e..]);
 
-                self.sl = r as u8;
-                self.sel = w as u8;
+                // the chunk ends with an incomplete character which is guaranteed to be a valid prefix
+                self.buffer.extend_from_slice(rest);
 
-                break;
-            }
+                self.sl = (rest.len() - valid_up_to) as u8;
+                self.sel = utf8_width::get_width(rest[valid_up_to]) as u8;
+            },
         }
 
         Ok(())

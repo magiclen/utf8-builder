@@ -3,7 +3,7 @@ use core::{
     fmt::{self, Display, Formatter},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Utf8Error;
 
 impl Display for Utf8Error {
