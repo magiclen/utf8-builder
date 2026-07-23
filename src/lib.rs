@@ -35,7 +35,7 @@ extern crate alloc;
 mod error;
 
 use alloc::{string::String, vec::Vec};
-use core::str::from_utf8;
+use core::{fmt, str::from_utf8};
 
 pub use error::Utf8Error;
 
@@ -72,7 +72,14 @@ impl Utf8Builder {
         self.buffer.reserve(additional);
     }
 
-    /// Returns the number of elements in the buffer.
+    /// Clears the builder, removing all data but keeping the allocated capacity.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+        self.sl = 0;
+    }
+
+    /// Returns the number of bytes in the buffer, including the bytes of the pending incomplete character.
     #[inline]
     pub fn len(&self) -> usize {
         self.buffer.len()
@@ -83,16 +90,27 @@ impl Utf8Builder {
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
+
+    /// Returns the current data as a byte slice, including the bytes of the pending incomplete character.
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buffer
+    }
 }
 
 impl Utf8Builder {
-    /// Returns whether the current data are valid UTF-8
+    /// Returns `true` if there is no pending incomplete character.
+    ///
+    /// Invalid bytes are never stored, so the data in the buffer is always valid UTF-8 when this returns `true`.
     #[inline]
     pub const fn is_valid(&self) -> bool {
         self.sl == 0
     }
 
-    /// Try to get the `String` instance.
+    /// Consumes the builder and returns the built `String`.
+    ///
+    /// Returns an error if the data ends with an incomplete character.
+    /// The data is dropped in that case, so use `into_bytes` instead if the raw data is still needed.
     #[inline]
     pub fn finalize(self) -> Result<String, Utf8Error> {
         if self.is_valid() {
@@ -102,6 +120,12 @@ impl Utf8Builder {
         } else {
             Err(Utf8Error)
         }
+    }
+
+    /// Consumes the builder and returns the raw data, even if it ends with an incomplete character.
+    #[inline]
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.buffer
     }
 }
 
@@ -123,6 +147,9 @@ const fn is_valid_continuation(lead: u8, index: u8, b: u8) -> bool {
 
 impl Utf8Builder {
     /// Pushes a byte.
+    ///
+    /// Returns an error if the byte is not allowed at the current position.
+    /// Nothing is stored in that case, so a correct byte can still be pushed afterwards.
     #[inline]
     pub fn push(&mut self, b: u8) -> Result<(), Utf8Error> {
         if self.sl == 0 {
@@ -161,6 +188,9 @@ impl Utf8Builder {
     }
 
     /// Pushes a `&str`.
+    ///
+    /// Returns an error if there is a pending incomplete character.
+    /// The builder state is unchanged in that case.
     #[inline]
     pub fn push_str(&mut self, s: &str) -> Result<(), Utf8Error> {
         if self.sl == 0 {
@@ -173,6 +203,9 @@ impl Utf8Builder {
     }
 
     /// Pushes a char.
+    ///
+    /// Returns an error if there is a pending incomplete character.
+    /// The builder state is unchanged in that case.
     #[inline]
     pub fn push_char(&mut self, c: char) -> Result<(), Utf8Error> {
         if self.sl == 0 {
@@ -187,6 +220,12 @@ impl Utf8Builder {
     }
 
     /// Pushes a chunk.
+    ///
+    /// The chunk does not have to be complete UTF-8 data, because a character can be split across chunks.
+    /// Returns an error if the chunk contains invalid data.
+    /// In that case, the leading valid part of the chunk is still stored, so the builder remains usable.
+    /// However, if the error happens while completing a pending incomplete character, nothing is stored.
+    #[inline]
     pub fn push_chunk(&mut self, chunk: &[u8]) -> Result<(), Utf8Error> {
         let chunk_size = chunk.len();
 
@@ -252,6 +291,19 @@ impl Utf8Builder {
         }
 
         Ok(())
+    }
+}
+
+/// Writing fails if there is a pending incomplete character.
+impl fmt::Write for Utf8Builder {
+    #[inline]
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.push_str(s).map_err(|_| fmt::Error)
+    }
+
+    #[inline]
+    fn write_char(&mut self, c: char) -> fmt::Result {
+        self.push_char(c).map_err(|_| fmt::Error)
     }
 }
 
