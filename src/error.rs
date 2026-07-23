@@ -1,12 +1,11 @@
-#[cfg(feature = "std")]
-use std::error::Error;
-#[cfg(feature = "std")]
-use std::fmt::{self, Display, Formatter};
+use core::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
 
 #[derive(Debug)]
 pub struct Utf8Error;
 
-#[cfg(feature = "std")]
 impl Display for Utf8Error {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -14,5 +13,4 @@ impl Display for Utf8Error {
     }
 }
 
-#[cfg(feature = "std")]
 impl Error for Utf8Error {}

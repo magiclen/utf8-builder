@@ -1,9 +1,9 @@
 [package]
 name = "utf8-builder"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Magic Len <len@magiclen.org>"]
-edition = "2021"
-rust-version = "1.56"
+edition = "2024"
+rust-version = "1.85"
 repository = "https://github.com/magiclen/utf8-builder"
 homepage = "https://magiclen.org/utf8-builder"
 keywords = ["utf-8", "string", "character"]
@@ -14,8 +14,3 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
 utf8-width = "0.1"
-
-[features]
-default = ["std"]
-
-std = []

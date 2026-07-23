@@ -26,17 +26,7 @@ builder.push_chunk(TEXT2.as_bytes()).unwrap();
 
 let result = builder.finalize().unwrap();
 
-assert_eq!(format!("Th{}{}", TEXT1, TEXT2), result);
-```
-
-## No Std
-
-Disable the default features to compile this crate without std.
-
-```toml
-[dependencies.utf8-builder]
-version = "*"
-default-features = false
+assert_eq!(format!("Th{TEXT1}{TEXT2}"), result);
 ```
 
 ## Crates.io
